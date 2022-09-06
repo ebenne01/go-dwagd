@@ -16,6 +16,7 @@ package main
 
 import (
 	"testing"
+	"time"
 )
 
 var leapYears = [...]int{
@@ -40,6 +41,16 @@ var nonLeapYears = [...]int{
 	2065, 2069, 2073, 2077, 2081, 2085, 2089, 2093, 2097,
 }
 
+var daysOfWeek = map[string]string{
+	"1804-12-23": "Sunday",
+	"1753-01-01": "Monday",
+	"2019-10-29": "Tuesday",
+	"1937-08-18": "Wednesday",
+	"2037-04-02": "Thursday",
+	"1949-10-21": "Friday",
+	"1992-06-20": "Saturday",
+}
+
 func TestIsLeapYearTrue(t *testing.T) {
 	for _, n := range leapYears {
 		if isLeapYear(n) == false {
@@ -55,4 +66,22 @@ func TestIsLeapYearFalse(t *testing.T) {
 			t.Errorf("%d is a leap year", n)
 		}
 	}
+}
+
+func TestValidDates(t *testing.T) {
+	for k, v := range daysOfWeek {
+		tm := parseDate(k)
+		actual, err := calculateDayOfWeek(tm)
+		if err != nil || actual != v {
+			t.Errorf("Incorrect day calculated for date %s", k)
+		}
+	}
+}
+
+//
+// helper functions
+//
+func parseDate(s string) time.Time {
+	tm, _ := time.Parse(layoutISO, s)
+	return tm
 }
