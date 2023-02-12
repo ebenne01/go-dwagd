@@ -15,18 +15,25 @@
 package main
 
 import (
+	"encoding/json"
 	"errors"
+	"fmt"
 	"net/http"
+	"regexp"
 	"strconv"
 	"time"
-
-	"github.com/gin-gonic/gin"
 )
 
 const (
 	layoutISO    = "2006-01-02"
 	twoDigitYear = "06"
 )
+
+var (
+	getDayOfWeekRegex = regexp.MustCompile(`^\/dayofweek\/(\d{4}-\d{2}-\d{2})$`)
+)
+
+type dayOfWeekHandler struct{}
 
 type month struct {
 	Name      string
@@ -60,28 +67,11 @@ var days = map[int]string{
 }
 
 func main() {
-	router := gin.Default()
-	router.GET("/dayofweek/:date", getDayOfWeek)
-	router.Run("localhost:8080")
-}
-
-func getDayOfWeek(c *gin.Context) {
-	tm, err := time.Parse(layoutISO, c.Param("date"))
-
-	if err != nil {
-		c.JSON(http.StatusBadRequest, "Invalid date format.  Must be yyyy-mm-dd")
-		return
-	}
-
-	day, err := calculateDayOfWeek(tm)
-
-	if err != nil {
-		c.JSON(http.StatusBadRequest, err.Error())
-		return
-	}
-
-	c.IndentedJSON(http.StatusOK, day)
-
+	mux := http.NewServeMux()
+	handler := &dayOfWeekHandler{}
+	mux.Handle("/dayofweek", handler)
+	mux.Handle("/dayofweek/", handler)
+	http.ListenAndServe(":8080", mux)
 }
 
 func calculateDayOfWeek(tm time.Time) (string, error) {
@@ -92,11 +82,11 @@ func calculateDayOfWeek(tm time.Time) (string, error) {
 	shortYear, err := strconv.Atoi(tm.Format(twoDigitYear))
 
 	if yearVal < 1753 {
-		return "", errors.New("Year must be greater than 1752")
+		return "", errors.New("year must be greater than 1752")
 	}
 
 	if err != nil {
-		return "", errors.New("Bad year")
+		return "", errors.New("bad year")
 	}
 
 	var sum = shortYear
@@ -125,4 +115,49 @@ func calculateDayOfWeek(tm time.Time) (string, error) {
 
 func isLeapYear(year int) bool {
 	return (year%400 == 0) || ((year%4 == 0) && year%100 != 0)
+}
+
+func (h *dayOfWeekHandler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
+	if r.Method == http.MethodGet && getDayOfWeekRegex.MatchString(r.URL.Path) {
+		h.getDayOfWeek(w, r)
+		return
+	} else {
+		writeJSONResponse(w, http.StatusBadRequest, fmt.Sprintf("%s - %s", "Bad request", r.URL.Path))
+		return
+	}
+}
+
+func writeJSONResponse(w http.ResponseWriter, code int, obj any) error {
+	w.Header().Set("content-type", "application/json")
+	w.WriteHeader(code)
+	jsonBytes, err := json.MarshalIndent(obj, "", "    ")
+	if err != nil {
+		return err
+	}
+	_, err = w.Write(jsonBytes)
+	return err
+}
+
+func (h *dayOfWeekHandler) getDayOfWeek(w http.ResponseWriter, r *http.Request) {
+	matches := getDayOfWeekRegex.FindStringSubmatch(r.URL.Path)
+	if len(matches) < 2 {
+		writeJSONResponse(w, http.StatusNotFound, "not found")
+		return
+	}
+
+	tm, err := time.Parse(layoutISO, matches[1])
+
+	if err != nil {
+		writeJSONResponse(w, http.StatusBadRequest, "Invalid date format.  Must be yyyy-mm-dd")
+		return
+	}
+
+	day, err := calculateDayOfWeek(tm)
+
+	if err != nil {
+		writeJSONResponse(w, http.StatusBadRequest, err.Error())
+		return
+	}
+
+	writeJSONResponse(w, http.StatusOK, day)
 }
