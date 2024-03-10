@@ -24,5 +24,6 @@ clean:
 	@echo "Cleaning..."
 	@$(GOCMD) clean
 	@rm -f $(TARGET)
+	@rm -f coverage.out
 
 .PHONY: all build clean run test
